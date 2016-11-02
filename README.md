@@ -1,2 +1,2 @@
 # blog_python
-a blog power by python
+a blog powered by python
