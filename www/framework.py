@@ -8,6 +8,7 @@ import asyncio
 import logging
 from importlib import import_module
 
+
 def get(path):
 	def decorator(fn):
 		@functools.wraps(fn)
@@ -24,7 +25,7 @@ def post(path):
 		@functools.wraps(fn)
 		def wrapper(*args, **kw):
 			return fn(args, kw)
-		wrapper.__route__ = path
+		wrapper.__path__ = path
 		wrapper.__method__ = 'POST'
 		return wrapper
 	return decorator
@@ -36,17 +37,17 @@ def add_route(app, fn):
 
 	if not method or not path:
 		raise ValueError('未使用@get或者@post: %s' % fn.__name__)
-	else if not inspect.iscoroutinefunction(fn) or not inspect.isnogeneratorfunction(fn):
+	elif not inspect.iscoroutinefunction(fn) or not inspect.isnogeneratorfunction(fn):
 		fn = asyncio.coroutine(fn)
 
 	logging.info('adding route: %s %s to %s' % (method, path, fn.__name__))
 	app.router.add_route(method, path, fn)
 
 
-def add_routes(app, module_name)
+def add_routes(app, module_name):
 	mod = import_module_(module_name)
 	for attr in dir(mod):
-		if attr.startwith('_'):
+		if attr.startswith('_'):
 			continue
 		else:
 			fn = getattr(mod, attr)
@@ -54,7 +55,7 @@ def add_routes(app, module_name)
 				method = getattr(fn, '__method__', None)
 				path = getattr(fn, '__path__', None)
 				if method and path:
-					add_route(app, attr)
+					add_route(app, fn)
 
 
 
@@ -66,7 +67,23 @@ def import_module_(module_name):
 		raise ValueError('暂时只支持同包的模块导入')
 
 def main():
-	pass
+	class Router(object):
+		def add_route(self, method, path, fn):
+			print(method, path, fn)
+
+	class App(object):
+		pass
+
+	app = App()
+	app.router = Router()
+	def fn():
+		pass
+	fn.__method__ = 'GET'
+	fn.__path__ = '/home'
+	# add_route(app, fn)
+
+	add_routes(app, 'handlers')
+
 
 
 if __name__ == '__main__':

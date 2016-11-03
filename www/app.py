@@ -4,16 +4,15 @@
 import logging; logging.basicConfig(level=logging.INFO)
 import asyncio
 from aiohttp import web
+from framework import add_routes
 
 HOST = '127.0.0.1'
 PORT = 8888
 
-async def index(request):
-	return web.Response(body=b'<h1>Hello!</h1>', content_type='text/html', charset='utf-8')
 
 async def init(loop):
 	app = web.Application(loop=loop)
-	app.router.add_route('GET', '/', index)
+	add_routes(app, 'handlers')
 	logging.info('server started at %s:%d' % (HOST, PORT))
 	return await loop.create_server(app.make_handler(), HOST, PORT)
 
