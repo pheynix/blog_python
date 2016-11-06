@@ -25,7 +25,7 @@ def post(path):
 	def decorator(fn):
 		@functools.wraps(fn)
 		def wrapper(*args, **kw):
-			return fn(args, kw)
+			return fn(*args, **kw)
 		wrapper.__path__ = path
 		wrapper.__method__ = 'POST'
 		return wrapper
@@ -182,7 +182,7 @@ def import_module_(module_name):
 def add_static(app):
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
     app.router.add_static('/static/', path)
-    logging.info('adding static %s %s' % ('/static/', path))
+    logging.info('adding static %s' % (path, ))
 
 
 def main():
