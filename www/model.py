@@ -1,12 +1,25 @@
 # !/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from sqlalchemy import Column, Integer, BigInteger, String, Text, Boolean, DateTime, ForeignKey, create_engine
 from sqlalchemy.orm import sessionmaker, relationship
 from time import time
+from config import configs
 
 Base = declarative_base()
+
+# class StrMixIn(object):
+# 	@declared_attr
+# 	def __getattr__(self, attr):
+# 		print('hhahahahahaha')
+# 		if attr in dir(self):
+# 			if isinstance(self.attr, bytearray):
+# 				return self.attr.decode('utf-8')
+# 			else:
+# 				return self.attr
+# 		else:
+# 			raise AttributeError()
 
 class User(Base):
 	__tablename__ = 'user'
@@ -14,6 +27,7 @@ class User(Base):
 	id = Column(Integer, primary_key=True, nullable=False)
 	email = Column(String(100), nullable=False)
 	username = Column(String(100), nullable=False)
+	# Column('username', String(100), nullable=False)
 	password = Column(String(100), nullable=False)
 	is_admin = Column(Boolean, default=False)
 	avatar_url = Column(String(200), default='/www/static/default_avatar.png')
@@ -43,7 +57,9 @@ class Comment(Base):
 	created_at = Column(BigInteger, default=time)
 
 
-engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/db_test', echo=True)
+db = configs['db']
+url = 'mysql+mysqlconnector://%s:%s@%s:%s/%s' % (db['user'], db['password'], db['host'], db['port'], db['db'])
+engine = create_engine(url, echo=True, convert_unicode=True, encoding='utf-8')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
@@ -56,14 +72,14 @@ def main():
 	session.add(user2)
 	session.commit()
 
-	blog1 = Blog(user_id=1, title='论吃饭的重要性')
-	blog2 = Blog(user_id=2, title='什么才是世界上最好的语言')
+	blog1 = Blog(user_id=1, title='论吃饭的重要性', summary='吃饭很重要，比搬砖还要重要')
+	blog2 = Blog(user_id=2, title='什么才是世界上最好的语言', summary='0生1 1生c c生万物')
 	session.add(blog1)
 	session.add(blog2)
 	session.commit()
 
 	comment1 = Comment(user_id=2, blog_id=1, content='食屎啦你')
-	comment1 = Comment(user_id=1, blog_id=2, content='php不服来辩')
+	comment2 = Comment(user_id=1, blog_id=2, content='php不服来辩')
 	session.add(comment1)
 	session.add(comment2)
 	session.commit()

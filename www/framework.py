@@ -1,0 +1,209 @@
+# !/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+
+import functools
+import inspect
+import asyncio
+import logging
+from importlib import import_module
+import os
+
+
+def get(path):
+	def decorator(fn):
+		@functools.wraps(fn)
+		def wrapper(*args, **kw):
+			return fn(*args, **kw)
+		wrapper.__path__ = path
+		wrapper.__method__ = 'GET'
+		return wrapper
+	return decorator
+
+
+def post(path):
+	def decorator(fn):
+		@functools.wraps(fn)
+		def wrapper(*args, **kw):
+			return fn(*args, **kw)
+		wrapper.__path__ = path
+		wrapper.__method__ = 'POST'
+		return wrapper
+	return decorator
+
+
+#-------------------应该是用来将所需的数据解析成一个dict方便取用------------------------------
+
+
+def get_required_kw_args(fn):
+    args = []
+    params = inspect.signature(fn).parameters
+    for name, param in params.items():
+        if param.kind == inspect.Parameter.KEYWORD_ONLY and param.default == inspect.Parameter.empty:
+            args.append(name)
+    return tuple(args)
+
+def get_named_kw_args(fn):
+    args = []
+    params = inspect.signature(fn).parameters
+    for name, param in params.items():
+        if param.kind == inspect.Parameter.KEYWORD_ONLY:
+            args.append(name)
+    return tuple(args)
+
+def has_named_kw_args(fn):
+    params = inspect.signature(fn).parameters
+    for name, param in params.items():
+        if param.kind == inspect.Parameter.KEYWORD_ONLY:
+            return True
+
+def has_var_kw_arg(fn):
+    params = inspect.signature(fn).parameters
+    for name, param in params.items():
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            return True
+
+def has_request_arg(fn):
+    sig = inspect.signature(fn)
+    params = sig.parameters
+    found = False
+    for name, param in params.items():
+        if name == 'request':
+            found = True
+            continue
+        if found and (param.kind != inspect.Parameter.VAR_POSITIONAL and param.kind != inspect.Parameter.KEYWORD_ONLY and param.kind != inspect.Parameter.VAR_KEYWORD):
+            raise ValueError('request parameter must be the last named parameter in function: %s%s' % (fn.__name__, str(sig)))
+    return found
+
+class RequestHandler(object):
+
+    def __init__(self, app, fn):
+        self._app = app
+        self._func = fn
+        self._has_request_arg = has_request_arg(fn)
+        self._has_var_kw_arg = has_var_kw_arg(fn)
+        self._has_named_kw_args = has_named_kw_args(fn)
+        self._named_kw_args = get_named_kw_args(fn)
+        self._required_kw_args = get_required_kw_args(fn)
+
+    async def __call__(self, request):
+        kw = None
+        if self._has_var_kw_arg or self._has_named_kw_args or self._required_kw_args:
+            if request.method == 'POST':
+                if not request.content_type:
+                    return web.HTTPBadRequest('Missing Content-Type.')
+                ct = request.content_type.lower()
+                if ct.startswith('application/json'):
+                    params = await request.json()
+                    if not isinstance(params, dict):
+                        return web.HTTPBadRequest('JSON body must be object.')
+                    kw = params
+                elif ct.startswith('application/x-www-form-urlencoded') or ct.startswith('multipart/form-data'):
+                    params = await request.post()
+                    kw = dict(**params)
+                else:
+                    return web.HTTPBadRequest('Unsupported Content-Type: %s' % request.content_type)
+            if request.method == 'GET':
+                qs = request.query_string
+                if qs:
+                    kw = dict()
+                    for k, v in parse.parse_qs(qs, True).items():
+                        kw[k] = v[0]
+        if kw is None:
+            kw = dict(**request.match_info)
+        else:
+            if not self._has_var_kw_arg and self._named_kw_args:
+                # remove all unamed kw:
+                copy = dict()
+                for name in self._named_kw_args:
+                    if name in kw:
+                        copy[name] = kw[name]
+                kw = copy
+            # check named arg:
+            for k, v in request.match_info.items():
+                if k in kw:
+                    logging.warning('Duplicate arg name in named arg and kw args: %s' % k)
+                kw[k] = v
+        if self._has_request_arg:
+            kw['request'] = request
+        # check required kw:
+        if self._required_kw_args:
+            for name in self._required_kw_args:
+                if not name in kw:
+                    return web.HTTPBadRequest('Missing argument: %s' % name)
+        logging.info('call with args: %s' % str(kw))
+        try:
+            r = await self._func(**kw)
+            return r
+        except APIError as e:
+            return dict(error=e.error, data=e.data, message=e.message)
+
+
+# https://github.com/michaelliao/awesome-python3-webapp/blob/day-05/www/coroweb.py
+# --------------------------------------------------------------------------------
+
+
+def add_route(app, fn):
+	method = getattr(fn, '__method__', None)
+	path = getattr(fn, '__path__', None)
+
+	if not method or not path:
+		raise ValueError('未使用@get或者@post: %s' % fn.__name__)
+	elif not inspect.iscoroutinefunction(fn) or not inspect.isnogeneratorfunction(fn):
+		fn = asyncio.coroutine(fn)
+
+	logging.info('adding route: %s %s to %s' % (method, path, fn.__name__))
+	app.router.add_route(method, path, fn)
+
+
+def add_routes(app, module_name):
+	mod = import_module_(module_name)
+	for attr in dir(mod):
+		if attr.startswith('_'):
+			continue
+		else:
+			fn = getattr(mod, attr)
+			if callable(fn):
+				method = getattr(fn, '__method__', None)
+				path = getattr(fn, '__path__', None)
+				if method and path:
+					add_route(app, fn)
+
+
+
+def import_module_(module_name):
+	n = module_name.rfind('.')
+	if n == (-1):
+		return import_module(module_name)
+	else:
+		raise ValueError('暂时只支持同包的模块导入')
+
+
+def add_static(app):
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+    app.router.add_static('/static/', path)
+    logging.info('adding static %s' % (path, ))
+
+
+def main():
+	class Router(object):
+		def add_route(self, method, path, fn):
+			print(method, path, fn)
+
+	class App(object):
+		pass
+
+	app = App()
+	app.router = Router()
+	def fn():
+		pass
+	fn.__method__ = 'GET'
+	fn.__path__ = '/home'
+	# add_route(app, fn)
+
+	add_routes(app, 'handlers')
+
+
+
+if __name__ == '__main__':
+	main()
