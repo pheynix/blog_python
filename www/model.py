@@ -59,7 +59,7 @@ class Comment(Base):
 
 db = configs['db']
 url = 'mysql+mysqlconnector://%s:%s@%s:%s/%s' % (db['user'], db['password'], db['host'], db['port'], db['db'])
-engine = create_engine(url, echo=True)
+engine = create_engine(url, echo=True, convert_unicode=True, encoding='utf-8')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
@@ -72,8 +72,8 @@ def main():
 	session.add(user2)
 	session.commit()
 
-	blog1 = Blog(user_id=1, title='论吃饭的重要性')
-	blog2 = Blog(user_id=2, title='什么才是世界上最好的语言')
+	blog1 = Blog(user_id=1, title='论吃饭的重要性', summary='吃饭很重要，比搬砖还要重要')
+	blog2 = Blog(user_id=2, title='什么才是世界上最好的语言', summary='0生1 1生c c生万物')
 	session.add(blog1)
 	session.add(blog2)
 	session.commit()

@@ -5,6 +5,7 @@ import logging; logging.basicConfig(level=logging.INFO)
 import asyncio
 import json
 import os
+import time
 from aiohttp import web
 from framework import add_routes, add_static
 from datetime import datetime
@@ -61,6 +62,13 @@ async def response_factory(app, handler):
 		elif isinstance(result, dict):
 			template = result.get('__template__')
 			if template is None:
+				def fn(o):
+					if hasattr(o, '__dict__'):
+						if isinstance(result, bytes):
+							return result.decode('utf-8').__dict__
+						else:
+							return result.__dict__
+
 				body = json.dumps(result, ensure_ascii=False, default=lambda o: o.__dict__)
 				resp = web.Response(body=body.encode('utf-8'))
 				resp.content_type = 'application/json;charset=utf-8'

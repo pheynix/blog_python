@@ -1,0 +1,17 @@
+{% extends '__base__.html' %}
+
+{% block title %}主页{% endblock %}
+
+{% block content %}
+	<div>
+		{% for blog in blogs %}
+		<div>
+			<h2>{{blog.title.decode('utf-8')}}</h2>
+			<p>created at {{blog.created_at|datetime}}</p>
+			<p>{{blog.summary.decode('utf-8')}}</p>
+			<a href="/blog/{{blog.id}}">继续阅读</a>
+			<hr role="separator" class="divider"></hr>
+		</div>
+		{% endfor %}
+	</div>
+{% endblock %}
